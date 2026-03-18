@@ -1,4 +1,4 @@
-﻿#include <math.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,19 +15,19 @@
 #include "HW_access.h"
 
 // SERIAL SIMULATOR CHANNELS
-#define COM_CH_0 (0)
-#define COM_CH_1 (1)
-#define COM_CH_2 (2)
-#define R_BUF_SIZE (64)
-#define REC_BUF_50 (50)
+#define COM_CH_0 (0U)
+#define COM_CH_1 (1U)
+#define COM_CH_2 (2U)
+#define R_BUF_SIZE (64U)
+#define REC_BUF_50 (50U)
 
 typedef float float_t;
 
 // TASK PRIORITIES
-#define TASK_SERIAl_REC_PRI_kanali ( tskIDLE_PRIORITY + 4 )
-#define TASK_SERIAl_REC_PRI ( tskIDLE_PRIORITY + 3 )
-#define SERVICE_TASK_PRI ( tskIDLE_PRIORITY + 2 )
-#define OBRADA_PRI ( tskIDLE_PRIORITY + 1 )
+#define TASK_SERIAl_REC_PRI_kanali ( tskIDLE_PRIORITY + 4U )
+#define TASK_SERIAl_REC_PRI         ( tskIDLE_PRIORITY + 3U )
+#define SERVICE_TASK_PRI            ( tskIDLE_PRIORITY + 2U )
+#define OBRADA_PRI                  ( tskIDLE_PRIORITY + 1U )
 
 // GLOBAL OS-HANDLES
 static SemaphoreHandle_t RXC_BinarySemaphore, RXC_BinarySemaphore1, RXC2_BinarySemaphore;
@@ -40,7 +40,7 @@ static QueueHandle_t kalibracija_D_min, kalibracija_D_max;
 static QueueHandle_t sistem_upaljen, rel_podatak, displej1, displej2;
 
 static const uint8_t hexnum[] = { 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F };
-static const uint8_t crtica = 0x40;
+static const uint8_t crtica = 0x40U;
 
 // Globalne varijable
 static float_t g_mmL = 0.0f, g_mmD = 0.0f;
@@ -91,7 +91,7 @@ void posalji_na_pc(const char* str) {
     vTaskDelay(pdMS_TO_TICKS(40));
 }
 
-void Dioda_Aktivacija_Task(void* pvParameters) {
+void LED_sistem_aktivan(void* pvParameters) {
     uint8_t flag = 1U;
     for (;;) {
         xSemaphoreTake(LED_INT_BinarySemaphore, portMAX_DELAY);
@@ -113,9 +113,9 @@ void SerialReceive_Task(void* pvParameters) {
                 xQueueSend(Data_Queue, &broj, 0U); r_p1 = 0U; memset(r_buffer1, 0, R_BUF_SIZE);
             }
             else if (r_p1 < (uint8_t)(R_BUF_SIZE - 1U)) {
-                r_buffer1[r_p1++] = cc1; 
+                r_buffer1[r_p1++] = cc1;
             }
-            else { /* Buffer je napunjen */ }
+            else { /* Buffer pun */ }
         }
     }
 }
@@ -131,10 +131,10 @@ void SerialReceive_Task1(void* pvParameters) {
                 g_mmD = broj1;
                 xQueueSend(Data_Queue1, &broj1, 0U); r_p2 = 0U; memset(r_buffer2, 0, R_BUF_SIZE);
             }
-            else if (r_p2 < (uint8_t)(R_BUF_SIZE - 1U)) { 
-                r_buffer2[r_p2++] = cc2; 
+            else if (r_p2 < (uint8_t)(R_BUF_SIZE - 1U)) {
+                r_buffer2[r_p2++] = cc2;
             }
-            else { /* Buffer je napunjen */ }
+            else { /* Buffer pun */ }
         }
     }
 }
@@ -151,9 +151,9 @@ void SerialReceive_Task2(void* pvParameters) {
                 r_point = 0U; memset(rec, 0, REC_BUF_50);
             }
             else if (r_point < (uint8_t)(REC_BUF_50 - 1U)) {
-                rec[r_point++] = cc; 
+                rec[r_point++] = cc;
             }
-            else { /* Buffer je napunjen */ }
+            else { /* Buffer pun */ }
         }
     }
 }
@@ -173,7 +173,7 @@ void Kalibracija_kanal(void* pvParameters) {
             set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
             for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
         }
-        else { /* Prazan else za sigurnost - MISRA */ }
+        else { /* MISRA */ }
 
         if (strstr((const char*)prijem_rec, "LIJEVI") != NULL) {
             if (strstr((const char*)prijem_rec, "_0%") != NULL) {
@@ -186,7 +186,6 @@ void Kalibracija_kanal(void* pvParameters) {
                     printf("MAKSIMUM LIJEVI %d\n", val); xQueueSend(kalibracija_L_max, &val, 0U);
                 }
             }
-            else { /* Prazan else za sigurnost - MISRA */ }
         }
         else if (strstr((const char*)prijem_rec, "DESNI") != NULL) {
             if (strstr((const char*)prijem_rec, "_0%") != NULL) {
@@ -199,13 +198,11 @@ void Kalibracija_kanal(void* pvParameters) {
                     printf("MAKSIMUM DESNI %d\n", val); xQueueSend(kalibracija_D_max, &val, 0U);
                 }
             }
-            else { /* Prazan else za sigurnost - MISRA */ }
         }
-        else { /* Prazan else za sigurnost - MISRA */ }
     }
 }
 
-void racunaje_task(void* pvParameters) {
+void racunanje_task(void* pvParameters) {
     float_t brL = 0.0f, brD = 0.0f;
     int32_t minL = 200, maxL = 1000, minD = 200, maxD = 1000;
     float_t kalL = 0.0f, kalD = 0.0f;
@@ -220,26 +217,13 @@ void racunaje_task(void* pvParameters) {
             if (xQueueReceive(Data_Queue1, &brD, portMAX_DELAY) == pdPASS) {
                 kalL = ((brL - (float_t)minL) / (float_t)(maxL - minL)) * 100.0f;
                 kalD = ((brD - (float_t)minD) / (float_t)(maxD - minD)) * 100.0f;
-                if (kalL < 0.0f) {
-                    kalL = 0.0f; 
-                }
-                if (kalD < 0.0f) {
-                    kalD = 0.0f; 
-                }
+                if (kalL < 0.0f) { kalL = 0.0f; }
+                if (kalD < 0.0f) { kalD = 0.0f; }
                 g_kalL = kalL; g_kalD = kalD;
-                printf("Lijevi: %d%%, Desni: %d%%\n", (int32_t)kalL, (int32_t)kalD);
 
-                // NAPOMENA: Za finalnu verziju bi bilo bolje definisati 
-                // granične vrijednosti (npr. 100, 50, 20) kao makroe (#define), 
-                // ali sam ih ostavila ovako radi lakšeg testiranja simulatora.
-                
-                if (kalL < 20.0f || kalD < 20.0f) {
-                    printf("ZONA: KONTAKT_DETEKCIJA\n"); 
-                }
-                else if (kalL > 100.0f && kalD > 100.0f) {
-                    printf("ZONA: NEMA_DETEKCIJE\n"); 
-                }
-                else { /* Sigruna zona */ }
+                printf("Lijevi: %d%%, Desni: %d%%\n", (int32_t)kalL, (int32_t)kalD);
+                if (kalL < 20.0f || kalD < 20.0f) { printf("ZONA: KONTAKT_DETEKCIJA\n"); }
+                else if (kalL > 100.0f && kalD > 100.0f) { printf("ZONA: NEMA_DETEKCIJE\n"); }
 
                 xQueueSend(displej1, &kalL, 0U); xQueueSend(displej2, &kalD, 0U);
                 float_t rel = (kalL < kalD) ? kalL : kalD;
@@ -257,20 +241,13 @@ void PC_Reporting_Task(void* pvParameters) {
             sprintf(poruka, "LIJEVI: %dmm", (int32_t)g_mmL);
             posalji_na_pc(poruka);
             vTaskDelay(pdMS_TO_TICKS(100));
-
             sprintf(poruka, "DESNI: %dmm", (int32_t)g_mmD);
             posalji_na_pc(poruka);
             vTaskDelay(pdMS_TO_TICKS(100));
 
-            if (g_kalL < 20.0f || g_kalD < 20.0f) {
-                posalji_na_pc("ZONA: KONTAKT_DETEKCIJA");
-            }
-            else if (g_kalL > 100.0f && g_kalD > 100.0f) {
-                posalji_na_pc("ZONA: NEMA_DETEKCIJE");
-            }
-            else {
-                posalji_na_pc("ZONA: OK");
-            }
+            if (g_kalL < 20.0f || g_kalD < 20.0f) { posalji_na_pc("ZONA: KONTAKT_DETEKCIJA"); }
+            else if (g_kalL > 100.0f && g_kalD > 100.0f) { posalji_na_pc("ZONA: NEMA_DETEKCIJE"); }
+            else { posalji_na_pc("ZONA: OK"); }
             posalji_na_pc("----------------");
         }
     }
@@ -285,27 +262,17 @@ void LED_bar(void* pvParameters) {
         xQueueReceive(rel_podatak, &kal, 10);
         if (flag == 1U) {
             set_LED_BAR(1, 0x01);
-            if (kal < 0.0f) {
-                set_LED_BAR(2, 0x00); 
-            }
-            else if (kal <= 20.0f) {
-                set_LED_BAR(2, 0xFF); 
-            }
-            else if (kal >= 100.0f) {
-                set_LED_BAR(2, 0x00); 
-            }
+            if (kal < 0.0f) { set_LED_BAR(2, 0x00); }
+            else if (kal <= 20.0f) { set_LED_BAR(2, 0xFF); }
+            else if (kal >= 100.0f) { set_LED_BAR(2, 0x00); }
             else {
                 int32_t broj_dioda = (int32_t)((100.0f - kal) / 12.5f);
                 uint8_t maska = 0U;
-                for (int32_t i = 0; i < broj_dioda; i++) {
-                    maska |= (uint8_t)(1 << i); 
-                }
+                for (int32_t i = 0; i < broj_dioda; i++) { maska |= (uint8_t)(1 << i); }
                 set_LED_BAR(2, maska);
             }
         }
-        else {
-            set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00); 
-        }
+        else { set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00); }
     }
 }
 
@@ -323,9 +290,7 @@ void LCD_Displej(void* pvParams) {
         }
         select_7seg_digit(3); set_7seg_digit(0x40);
         if (xQueueReceive(displej2, &k2, 100) == pdPASS) {
-            if (k2 <= 20.0f) {
-                select_7seg_digit(4); set_7seg_digit(crtica); select_7seg_digit(5); set_7seg_digit(crtica); select_7seg_digit(6); set_7seg_digit(crtica); 
-            }
+            if (k2 <= 20.0f) { select_7seg_digit(4); set_7seg_digit(crtica); select_7seg_digit(5); set_7seg_digit(crtica); select_7seg_digit(6); set_7seg_digit(crtica); }
             else {
                 p = (int32_t)k2;
                 select_7seg_digit(4); set_7seg_digit(p >= 100 ? hexnum[p / 100] : 0x00);
@@ -343,9 +308,7 @@ void main_demo(void) {
     init_serial_uplink(COM_CH_2); init_serial_downlink(COM_CH_2);
 
     set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
-    for (uint8_t i = 0U; i < 7U; i++) {
-        select_7seg_digit(i); set_7seg_digit(0x00); 
-    }
+    for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
 
     vPortSetInterruptHandler(portINTERRUPT_SRL_RXC, prvProcessRXCInterrupt);
     vPortSetInterruptHandler(portINTERRUPT_SRL_TBE, prvProcessTBEInterrupt);
@@ -373,18 +336,14 @@ void main_demo(void) {
     displej1 = xQueueCreate(1, sizeof(float_t));
     displej2 = xQueueCreate(1, sizeof(float_t));
 
-    // Razmotriti da li task za očitavanje senzora treba da ima 
-    // veći prioritet od taska za ispis na terminal, kako ne bismo 
-    // gubili podatke u realnom vremenu pri većim brzinama.
-    
     xTaskCreate(SerialReceive_Task, "SRx0", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task1, "SRx1", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task2, "SRx2", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(Kalibracija_kanal, "Kali", configMINIMAL_STACK_SIZE, NULL, OBRADA_PRI, NULL);
-    xTaskCreate(racunaje_task, "Rac", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI_kanali, NULL);
+    xTaskCreate(racunanje_task, "Rac", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI_kanali, NULL);
     xTaskCreate(LED_bar, "LED", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
     xTaskCreate(LCD_Displej, "Disp", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
-    xTaskCreate(Dioda_Aktivacija_Task, "Dio", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
+    xTaskCreate(LED_sistem_aktivan, "LED_A", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
     xTaskCreate(PC_Reporting_Task, "PC", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
 
     vTaskStartScheduler();
