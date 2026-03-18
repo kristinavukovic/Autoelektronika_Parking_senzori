@@ -227,8 +227,12 @@ void racunaje_task(void* pvParameters) {
                     kalD = 0.0f; 
                 }
                 g_kalL = kalL; g_kalD = kalD;
-
                 printf("Lijevi: %d%%, Desni: %d%%\n", (int32_t)kalL, (int32_t)kalD);
+
+                // NAPOMENA: Za finalnu verziju bi bilo bolje definisati 
+                // granične vrijednosti (npr. 100, 50, 20) kao makroe (#define), 
+                // ali sam ih ostavila ovako radi lakšeg testiranja simulatora.
+                
                 if (kalL < 20.0f || kalD < 20.0f) {
                     printf("ZONA: KONTAKT_DETEKCIJA\n"); 
                 }
@@ -369,6 +373,10 @@ void main_demo(void) {
     displej1 = xQueueCreate(1, sizeof(float_t));
     displej2 = xQueueCreate(1, sizeof(float_t));
 
+    // Razmotriti da li task za očitavanje senzora treba da ima 
+    // veći prioritet od taska za ispis na terminal, kako ne bismo 
+    // gubili podatke u realnom vremenu pri većim brzinama.
+    
     xTaskCreate(SerialReceive_Task, "SRx0", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task1, "SRx1", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task2, "SRx2", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
