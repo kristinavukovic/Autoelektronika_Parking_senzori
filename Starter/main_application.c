@@ -25,7 +25,7 @@ typedef float float_t;
 
 // TASK PRIORITIES
 #define TASK_SERIAl_REC_PRI_kanali ( tskIDLE_PRIORITY + 4U )
-#define TASK_SERIAl_REC_PRI         ( tskIDLE_PRIORITY + 3U )
+#define TASK_SERIAl_REC_PRI          ( tskIDLE_PRIORITY + 3U )
 #define SERVICE_TASK_PRI            ( tskIDLE_PRIORITY + 2U )
 #define OBRADA_PRI                  ( tskIDLE_PRIORITY + 1U )
 
@@ -47,7 +47,6 @@ static float_t g_mmL = 0.0f, g_mmD = 0.0f;
 static float_t g_kalL = 0.0f, g_kalD = 0.0f;
 static uint8_t g_aktivan = 0U;
 
-// --- INTERRUPT HANDLERS ---
 static uint32_t prvProcessTBEInterrupt(void) {
     BaseType_t xHigherPTW = pdFALSE;
     if (get_TBE_status(COM_CH_0) != 0) { xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPTW); }
@@ -76,18 +75,13 @@ static uint32_t OnLED_ChangeInterrupt(void) {
 void posalji_na_pc(const char* str) {
     uint16_t i = 0U;
     while (str[i] != '\0') {
-        if (get_TBE_status(COM_CH_2) == 0) {
-            xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY);
-        }
+        if (get_TBE_status(COM_CH_2) == 0) { xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY); }
         send_serial_character(COM_CH_2, (uint8_t)str[i]);
-        vTaskDelay(pdMS_TO_TICKS(40));
-        i++;
+        vTaskDelay(pdMS_TO_TICKS(40)); i++;
     }
     xSemaphoreTake(TBE_BinarySemaphore2, pdMS_TO_TICKS(10));
-    send_serial_character(COM_CH_2, 13U); // CR
-    vTaskDelay(pdMS_TO_TICKS(40));
-    send_serial_character(COM_CH_2, 10U); // LF
-    vTaskDelay(pdMS_TO_TICKS(40));
+    send_serial_character(COM_CH_2, 13U); vTaskDelay(pdMS_TO_TICKS(40));
+    send_serial_character(COM_CH_2, 10U); vTaskDelay(pdMS_TO_TICKS(40));
 }
 
 void LED_sistem_aktivan(void* pvParameters) {
@@ -95,7 +89,7 @@ void LED_sistem_aktivan(void* pvParameters) {
     for (;;) {
         xSemaphoreTake(LED_INT_BinarySemaphore, portMAX_DELAY);
         printf("SISTEM AKTIVIRAN KLIKOM NA DIODU\n");
-        g_aktivan = 1U;
+        g_aktivan = 1U; 
         xQueueSend(sistem_upaljen, &flag, 0U);
     }
 }
@@ -107,14 +101,12 @@ void SerialReceive_Task(void* pvParameters) {
         xSemaphoreTake(RXC_BinarySemaphore, portMAX_DELAY);
         if (get_serial_character(COM_CH_0, &cc1) == 0) {
             if (cc1 == 0x0dU) {
-                r_buffer1[r_p1] = '\0'; broj = (float_t)atof((const char*)r_buffer1);
-                g_mmL = broj;
-                xQueueSend(Data_Queue, &broj, 0U); r_p1 = 0U; memset(r_buffer1, 0, R_BUF_SIZE);
+                r_buffer1[r_p1] = '\0';
+                broj = (float_t)atof((const char*)r_buffer1);
+                g_mmL = broj; xQueueSend(Data_Queue, &broj, 0U);
+                r_p1 = 0U; memset(r_buffer1, 0, R_BUF_SIZE);
             }
-            else if (r_p1 < (uint8_t)(R_BUF_SIZE - 1U)) {
-                r_buffer1[r_p1++] = cc1;
-            }
-            else { }
+            else if (r_p1 < (uint8_t)(R_BUF_SIZE - 1U)) { r_buffer1[r_p1++] = cc1; }
         }
     }
 }
@@ -127,78 +119,54 @@ void SerialReceive_Task1(void* pvParameters) {
         if (get_serial_character(COM_CH_1, &cc2) == 0) {
             if (cc2 == 0x0dU) {
                 r_buffer2[r_p2] = '\0'; broj1 = (float_t)atof((const char*)r_buffer2);
-                g_mmD = broj1;
-                xQueueSend(Data_Queue1, &broj1, 0U); r_p2 = 0U; memset(r_buffer2, 0, R_BUF_SIZE);
+                g_mmD = broj1; xQueueSend(Data_Queue1, &broj1, 0U);
+                r_p2 = 0U; memset(r_buffer2, 0, R_BUF_SIZE);
             }
-            else if (r_p2 < (uint8_t)(R_BUF_SIZE - 1U)) {
-                r_buffer2[r_p2++] = cc2;
-            }
-            else { }
+            else if (r_p2 < (uint8_t)(R_BUF_SIZE - 1U)) { r_buffer2[r_p2++] = cc2; }
         }
     }
 }
 
 void SerialReceive_Task2(void* pvParameters) {
-    uint8_t cc = 0U;
-    uint8_t rec[REC_BUF_50]; 
-    uint8_t r_point = 0U; 
-    memset(rec, 0, REC_BUF_50);
+    uint8_t cc = 0U; uint8_t rec[REC_BUF_50]; uint8_t r_point = 0U; memset(rec, 0, REC_BUF_50);
     for (;;) {
         xSemaphoreTake(RXC2_BinarySemaphore, portMAX_DELAY);
         if (get_serial_character(COM_CH_2, &cc) == 0) {
             if (cc == 0x0dU) {
-                rec[r_point] = '\0';
-                printf("Kanal 2 primio: %s\n", rec);
-                xQueueSend(red_kanal2, &rec, 0U);
-                r_point = 0U;
-                memset(rec, 0, REC_BUF_50);
+                rec[r_point] = '\0'; printf("Kanal 2 primio: %s\n", rec);
+                xQueueSend(red_kanal2, &rec, 0U); r_point = 0U; memset(rec, 0, REC_BUF_50);
             }
-            else if (r_point < (uint8_t)(REC_BUF_50 - 1U)) {
-                rec[r_point++] = cc;
-            }
-            else { }
+            else if (r_point < (uint8_t)(REC_BUF_50 - 1U)) { rec[r_point++] = cc; }
         }
     }
 }
 
 void Kalibracija_kanal(void* pvParameters) {
-    uint8_t prijem_rec[REC_BUF_50] = { 0 };
-    int32_t val = 0; 
-    uint8_t flag = 0U;
+    uint8_t prijem_rec[REC_BUF_50] = { 0 }; int32_t val = 0; uint8_t flag = 0U;
     for (;;) {
         xQueueReceive(red_kanal2, prijem_rec, portMAX_DELAY);
         if (strcmp((const char*)&prijem_rec[0], "REVERSE") == 0) {
-            flag = 1U;
-            g_aktivan = 1U; 
-            printf("SISTEM AKTIVAN\n");
-            xQueueSend(sistem_upaljen, &flag, 0U);
+            flag = 1U; g_aktivan = 1U; printf("SISTEM AKTIVAN\n"); xQueueSend(sistem_upaljen, &flag, 0U);
         }
         else if (strcmp((const char*)prijem_rec, "PARK") == 0 ||
             strcmp((const char*)prijem_rec, "DRIVE") == 0 ||
             strcmp((const char*)prijem_rec, "NEUTRAL") == 0) {
-            flag = 0U;
-            g_aktivan = 0U;
-            printf("SISTEM ISKLJUCEN\n");
+            flag = 0U; g_aktivan = 0U; printf("SISTEM ISKLJUCEN\n");
             xQueueSend(sistem_upaljen, &flag, 0U);
-            set_LED_BAR(1, 0x00); 
-            set_LED_BAR(2, 0x00);
-            for (uint8_t i = 0U; i < 7U; i++) { 
-                select_7seg_digit(i); 
-                set_7seg_digit(0x00); 
-            }
+            set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
+            for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
         }
-        else { }
 
         if (strstr((const char*)prijem_rec, "LIJEVI") != NULL) {
             if (strstr((const char*)prijem_rec, "_0%") != NULL) {
                 if (sscanf((const char*)prijem_rec, "KALIBRACIJA_LIJEVI_%dmm_0%%", &val) == 1) {
-                    printf("MINIMUM LIJEVI %d\n", val); 
+                    printf("MINIMUM LIJEVI %d\n", val);
                     xQueueSend(kalibracija_L_min, &val, 0U);
                 }
             }
             else if (strstr((const char*)prijem_rec, "_100%") != NULL) {
                 if (sscanf((const char*)prijem_rec, "KALIBRACIJA_LIJEVI_%dmm_100%%", &val) == 1) {
-                    printf("MAKSIMUM LIJEVI %d\n", val); 
+                    printf("MAKSIMUM LIJEVI %d\n", val);
                     xQueueSend(kalibracija_L_max, &val, 0U);
                 }
             }
@@ -212,7 +180,7 @@ void Kalibracija_kanal(void* pvParameters) {
             }
             else if (strstr((const char*)prijem_rec, "_100%") != NULL) {
                 if (sscanf((const char*)prijem_rec, "KALIBRACIJA_DESNI_%dmm_100%%", &val) == 1) {
-                    printf("MAKSIMUM DESNI %d\n", val); 
+                    printf("MAKSIMUM DESNI %d\n", val);
                     xQueueSend(kalibracija_D_max, &val, 0U);
                 }
             }
@@ -222,36 +190,32 @@ void Kalibracija_kanal(void* pvParameters) {
 
 void racunanje_task(void* pvParameters) {
     float_t brL = 0.0f, brD = 0.0f;
+    static float_t last_brL = 0.0f, last_brD = 0.0f;
     int32_t minL = 200, maxL = 1000, minD = 200, maxD = 1000;
     float_t kalL = 0.0f, kalD = 0.0f;
     uint8_t flag_sistem = 0U;
+
     for (;;) {
         xQueueReceive(kalibracija_L_min, &minL, 0);
         xQueueReceive(kalibracija_L_max, &maxL, 0);
         xQueueReceive(kalibracija_D_min, &minD, 0);
         xQueueReceive(kalibracija_D_max, &maxD, 0);
         xQueueReceive(sistem_upaljen, &flag_sistem, 0);
-        if (xQueueReceive(Data_Queue, &brL, pdMS_TO_TICKS(200)) == pdPASS) {
-            if (xQueueReceive(Data_Queue1, &brD, pdMS_TO_TICKS(200)) == pdPASS) {
-                kalL = ((brL - (float_t)minL) / (float_t)(maxL - minL)) * 100.0f;
-                kalD = ((brD - (float_t)minD) / (float_t)(maxD - minD)) * 100.0f;
-                if (kalL < 0.0f) { kalL = 0.0f; }
-                if (kalD < 0.0f) { kalD = 0.0f; }
-                g_kalL = kalL; g_kalD = kalD;
 
-                printf("Lijevi: %d%%, Desni: %d%%\n", (int32_t)kalL, (int32_t)kalD);
-                if (kalL < 20.0f || kalD < 20.0f) { 
-                    printf("ZONA: KONTAKT_DETEKCIJA\n"); 
-                }
-                else if (kalL > 100.0f && kalD > 100.0f) { 
-                    printf("ZONA: NEMA_DETEKCIJE\n"); 
-                }
+        if (xQueueReceive(Data_Queue, &brL, pdMS_TO_TICKS(200)) == pdPASS) { last_brL = brL; }
+        if (xQueueReceive(Data_Queue1, &brD, 0) == pdPASS) { last_brD = brD; }
 
-                xQueueSend(displej1, &kalL, 0U); xQueueSend(displej2, &kalD, 0U);
-                float_t rel = (kalL < kalD) ? kalL : kalD;
-                xQueueSend(rel_podatak, &rel, 0U);
-            }
-        }
+        kalL = ((last_brL - (float_t)minL) / (float_t)(maxL - minL)) * 100.0f;
+        kalD = ((last_brD - (float_t)minD) / (float_t)(maxD - minD)) * 100.0f;
+
+        if (kalL < 0.0f) { kalL = 0.0f; }
+        if (kalD < 0.0f) { kalD = 0.0f; }
+
+        g_kalL = kalL; g_kalD = kalD;
+
+        xQueueSend(displej1, &kalL, 0U); xQueueSend(displej2, &kalD, 0U);
+        float_t rel = (kalL < kalD) ? kalL : kalD;
+        xQueueSend(rel_podatak, &rel, 0U);
     }
 }
 
@@ -260,22 +224,15 @@ void PC_Reporting_Task(void* pvParameters) {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         if (g_aktivan != 0U) {
-            sprintf(poruka, "LIJEVI: %dmm", (int32_t)g_mmL);
-            posalji_na_pc(poruka);
+            sprintf(poruka, "LIJEVI: %dmm", (int32_t)g_mmL); posalji_na_pc(poruka);
             vTaskDelay(pdMS_TO_TICKS(100));
-            sprintf(poruka, "DESNI: %dmm", (int32_t)g_mmD);
-            posalji_na_pc(poruka);
+            sprintf(poruka, "DESNI: %dmm", (int32_t)g_mmD); posalji_na_pc(poruka);
             vTaskDelay(pdMS_TO_TICKS(100));
 
-            if (g_kalL < 20.0f || g_kalD < 20.0f) {
-                posalji_na_pc("ZONA: KONTAKT_DETEKCIJA");
-            }
-            else if (g_kalL > 100.0f && g_kalD > 100.0f) { 
-                posalji_na_pc("ZONA: NEMA_DETEKCIJE");
-            }
-            else { 
-                posalji_na_pc("ZONA SIGURNOSTI");
-            }
+            // VRACENO: ispis zona samo ovdje svake 5s
+            if (g_kalL < 20.0f || g_kalD < 20.0f) { posalji_na_pc("ZONA: KONTAKT_DETEKCIJA"); }
+            else if (g_kalL >= 100.0f && g_kalD >= 100.0f) { posalji_na_pc("ZONA: NEMA_DETEKCIJE"); }
+            else { posalji_na_pc("ZONA SIGURNOSTI"); }
             posalji_na_pc("----------------");
         }
     }
@@ -290,15 +247,9 @@ void LED_bar(void* pvParameters) {
         xQueueReceive(rel_podatak, &kal, 10);
         if (flag == 1U) {
             set_LED_BAR(1, 0x01);
-            if (kal < 0.0f) { 
-                set_LED_BAR(2, 0x00); 
-            }
-            else if (kal <= 20.0f) { 
-                set_LED_BAR(2, 0xFF); 
-            }
-            else if (kal >= 100.0f) { 
-                set_LED_BAR(2, 0x00); 
-            }
+            if (kal < 0.0f) { set_LED_BAR(2, 0x00); }
+            else if (kal <= 20.0f) { set_LED_BAR(2, 0xFF); }
+            else if (kal >= 100.0f) { set_LED_BAR(2, 0x00); }
             else {
                 int32_t broj_dioda = (int32_t)((100.0f - kal) / 12.5f);
                 uint8_t prom = 0U;
@@ -306,9 +257,7 @@ void LED_bar(void* pvParameters) {
                 set_LED_BAR(2, prom);
             }
         }
-        else { 
-            set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00); 
-        }
+        else { set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00); }
     }
 }
 
@@ -316,41 +265,30 @@ void LCD_Displej(void* pvParams) {
     float_t k1 = 0.0f, k2 = 0.0f; int32_t p;
     for (;;) {
         if (xQueueReceive(displej1, &k1, 100) == pdPASS) {
-            if (k1 <= 20.0f) { 
-                select_7seg_digit(0); 
-                set_7seg_digit(crtica); 
-                select_7seg_digit(1); 
-                set_7seg_digit(crtica); 
-                select_7seg_digit(2); 
-                set_7seg_digit(crtica); }
+            if (k1 <= 20.0f || k1 >= 100.0f) {
+                select_7seg_digit(0); set_7seg_digit(crtica);
+                select_7seg_digit(1); set_7seg_digit(crtica);
+                select_7seg_digit(2); set_7seg_digit(crtica);
+            }
             else {
                 p = (int32_t)k1;
-                select_7seg_digit(0);
-                set_7seg_digit(p >= 100 ? hexnum[p / 100] : 0x00);
-                select_7seg_digit(1); 
-                set_7seg_digit(hexnum[(p / 10) % 10]);
-                select_7seg_digit(2); 
-                set_7seg_digit(hexnum[p % 10]);
+                select_7seg_digit(0); set_7seg_digit(p >= 100 ? hexnum[p / 100] : 0x00);
+                select_7seg_digit(1); set_7seg_digit(hexnum[(p / 10) % 10]);
+                select_7seg_digit(2); set_7seg_digit(hexnum[p % 10]);
             }
         }
         select_7seg_digit(3); set_7seg_digit(0x40);
         if (xQueueReceive(displej2, &k2, 100) == pdPASS) {
-            if (k2 <= 20.0f) { 
-                select_7seg_digit(4); 
-                set_7seg_digit(crtica); 
-                select_7seg_digit(5); 
-                set_7seg_digit(crtica); 
-                select_7seg_digit(6);
-                set_7seg_digit(crtica); 
+            if (k2 <= 20.0f || k2 >= 100.0f) {
+                select_7seg_digit(4); set_7seg_digit(crtica);
+                select_7seg_digit(5); set_7seg_digit(crtica);
+                select_7seg_digit(6); set_7seg_digit(crtica);
             }
             else {
                 p = (int32_t)k2;
-                select_7seg_digit(4); 
-                set_7seg_digit(p >= 100 ? hexnum[p / 100] : 0x00);
-                select_7seg_digit(5); 
-                set_7seg_digit(hexnum[(p / 10) % 10]);
-                select_7seg_digit(6); 
-                set_7seg_digit(hexnum[p % 10]);
+                select_7seg_digit(4); set_7seg_digit(p >= 100 ? hexnum[p / 100] : 0x00);
+                select_7seg_digit(5); set_7seg_digit(hexnum[(p / 10) % 10]);
+                select_7seg_digit(6); set_7seg_digit(hexnum[p % 10]);
             }
         }
     }
@@ -363,10 +301,7 @@ void main_demo(void) {
     init_serial_uplink(COM_CH_2); init_serial_downlink(COM_CH_2);
 
     set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
-    for (uint8_t i = 0U; i < 7U; i++) { 
-        select_7seg_digit(i); 
-        set_7seg_digit(0x00); 
-    }
+    for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
 
     vPortSetInterruptHandler(portINTERRUPT_SRL_RXC, prvProcessRXCInterrupt);
     vPortSetInterruptHandler(portINTERRUPT_SRL_TBE, prvProcessTBEInterrupt);
