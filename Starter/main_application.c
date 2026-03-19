@@ -73,7 +73,6 @@ static uint32_t OnLED_ChangeInterrupt(void) {
     return 0;
 }
 
-// Funkcija za slanje na Kanal 2
 void posalji_na_pc(const char* str) {
     uint16_t i = 0U;
     while (str[i] != '\0') {
