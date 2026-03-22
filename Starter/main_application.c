@@ -4,17 +4,13 @@
 #include <string.h>
 #include <stdint.h> 
 
-// KERNEL INCLUDES
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
 #include "timers.h"
 #include "extint.h"
-
-// HARDWARE SIMULATOR UTILITY FUNCTIONS
 #include "HW_access.h"
 
-// SERIAL SIMULATOR CHANNELS
 #define COM_CH_0 (0U)
 #define COM_CH_1 (1U)
 #define COM_CH_2 (2U)
@@ -23,13 +19,11 @@
 
 typedef float float_t;
 
-// TASK PRIORITIES
 #define TASK_SERIAl_REC_PRI_kanali ( tskIDLE_PRIORITY + 4U )
 #define TASK_SERIAl_REC_PRI          ( tskIDLE_PRIORITY + 3U )
 #define SERVICE_TASK_PRI            ( tskIDLE_PRIORITY + 2U )
 #define OBRADA_PRI                  ( tskIDLE_PRIORITY + 1U )
 
-// GLOBAL OS-HANDLES
 static SemaphoreHandle_t RXC_BinarySemaphore, RXC_BinarySemaphore1, RXC2_BinarySemaphore;
 static SemaphoreHandle_t TBE_BinarySemaphore, TBE_BinarySemaphore1, TBE_BinarySemaphore2;
 static SemaphoreHandle_t LED_INT_BinarySemaphore;
@@ -42,7 +36,6 @@ static QueueHandle_t sistem_upaljen, rel_podatak, displej1, displej2;
 static const uint8_t hexnum[] = { 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F };
 static const uint8_t crtica = 0x40U;
 
-// Globalne varijable
 static float_t g_mmL = 0.0f, g_mmD = 0.0f;
 static float_t g_kalL = 0.0f, g_kalD = 0.0f;
 static uint8_t g_aktivan = 0U;
@@ -89,7 +82,7 @@ void LED_sistem_aktivan(void* pvParameters) {
     for (;;) {
         xSemaphoreTake(LED_INT_BinarySemaphore, portMAX_DELAY);
         printf("SISTEM AKTIVIRAN KLIKOM NA DIODU\n");
-        g_aktivan = 1U; 
+        g_aktivan = 1U;
         xQueueSend(sistem_upaljen, &flag, 0U);
     }
 }
@@ -194,25 +187,19 @@ void racunanje_task(void* pvParameters) {
     int32_t minL = 200, maxL = 1000, minD = 200, maxD = 1000;
     float_t kalL = 0.0f, kalD = 0.0f;
     uint8_t flag_sistem = 0U;
-
     for (;;) {
         xQueueReceive(kalibracija_L_min, &minL, 0);
         xQueueReceive(kalibracija_L_max, &maxL, 0);
         xQueueReceive(kalibracija_D_min, &minD, 0);
         xQueueReceive(kalibracija_D_max, &maxD, 0);
         xQueueReceive(sistem_upaljen, &flag_sistem, 0);
-
         if (xQueueReceive(Data_Queue, &brL, pdMS_TO_TICKS(200)) == pdPASS) { last_brL = brL; }
         if (xQueueReceive(Data_Queue1, &brD, 0) == pdPASS) { last_brD = brD; }
-
         kalL = ((last_brL - (float_t)minL) / (float_t)(maxL - minL)) * 100.0f;
         kalD = ((last_brD - (float_t)minD) / (float_t)(maxD - minD)) * 100.0f;
-
         if (kalL < 0.0f) { kalL = 0.0f; }
         if (kalD < 0.0f) { kalD = 0.0f; }
-
         g_kalL = kalL; g_kalD = kalD;
-
         xQueueSend(displej1, &kalL, 0U); xQueueSend(displej2, &kalD, 0U);
         float_t rel = (kalL < kalD) ? kalL : kalD;
         xQueueSend(rel_podatak, &rel, 0U);
@@ -228,8 +215,6 @@ void PC_Reporting_Task(void* pvParameters) {
             vTaskDelay(pdMS_TO_TICKS(100));
             sprintf(poruka, "DESNI: %dmm", (int32_t)g_mmD); posalji_na_pc(poruka);
             vTaskDelay(pdMS_TO_TICKS(100));
-
-            // VRACENO: ispis zona samo ovdje svake 5s
             if (g_kalL < 20.0f || g_kalD < 20.0f) { posalji_na_pc("ZONA: KONTAKT_DETEKCIJA"); }
             else if (g_kalL >= 100.0f && g_kalD >= 100.0f) { posalji_na_pc("ZONA: NEMA_DETEKCIJE"); }
             else { posalji_na_pc("ZONA SIGURNOSTI"); }
@@ -241,11 +226,9 @@ void PC_Reporting_Task(void* pvParameters) {
 void LED_bar(void* pvParameters) {
     float_t kal = -1.0f; uint8_t flag = 0U;
     for (;;) {
-        uint8_t prethodni_flag = flag;
         xQueueReceive(sistem_upaljen, &flag, 0);
-        if (prethodni_flag == 0U && flag == 1U) { kal = -1.0f; }
         xQueueReceive(rel_podatak, &kal, 10);
-        if (flag == 1U) {
+        if (g_aktivan == 1U) {
             set_LED_BAR(1, 0x01);
             if (kal < 0.0f) { set_LED_BAR(2, 0x00); }
             else if (kal <= 20.0f) { set_LED_BAR(2, 0xFF); }
@@ -264,6 +247,11 @@ void LED_bar(void* pvParameters) {
 void LCD_Displej(void* pvParams) {
     float_t k1 = 0.0f, k2 = 0.0f; int32_t p;
     for (;;) {
+        if (g_aktivan == 0U) {
+            for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
         if (xQueueReceive(displej1, &k1, 100) == pdPASS) {
             if (k1 <= 20.0f || k1 >= 100.0f) {
                 select_7seg_digit(0); set_7seg_digit(crtica);
@@ -299,10 +287,8 @@ void main_demo(void) {
     init_serial_uplink(COM_CH_0); init_serial_downlink(COM_CH_0);
     init_serial_uplink(COM_CH_1); init_serial_downlink(COM_CH_1);
     init_serial_uplink(COM_CH_2); init_serial_downlink(COM_CH_2);
-
     set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
     for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
-
     vPortSetInterruptHandler(portINTERRUPT_SRL_RXC, prvProcessRXCInterrupt);
     vPortSetInterruptHandler(portINTERRUPT_SRL_TBE, prvProcessTBEInterrupt);
     vPortSetInterruptHandler(portINTERRUPT_SRL_OIC, OnLED_ChangeInterrupt);
@@ -310,11 +296,11 @@ void main_demo(void) {
     RXC_BinarySemaphore = xSemaphoreCreateBinary();
     RXC_BinarySemaphore1 = xSemaphoreCreateBinary();
     RXC2_BinarySemaphore = xSemaphoreCreateBinary();
+
     TBE_BinarySemaphore = xSemaphoreCreateBinary();
     TBE_BinarySemaphore1 = xSemaphoreCreateBinary();
     TBE_BinarySemaphore2 = xSemaphoreCreateBinary();
     LED_INT_BinarySemaphore = xSemaphoreCreateBinary();
-
     xSemaphoreGive(TBE_BinarySemaphore2);
 
     Data_Queue = xQueueCreate(5, sizeof(float_t));
