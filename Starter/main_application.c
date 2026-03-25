@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h> 
+#include <stdint.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -20,9 +20,9 @@
 typedef float float_t;
 
 #define TASK_SERIAl_REC_PRI_kanali ( tskIDLE_PRIORITY + 4U )
-#define TASK_SERIAl_REC_PRI          ( tskIDLE_PRIORITY + 3U )
-#define SERVICE_TASK_PRI            ( tskIDLE_PRIORITY + 2U )
-#define OBRADA_PRI                  ( tskIDLE_PRIORITY + 1U )
+#define TASK_SERIAl_REC_PRI        ( tskIDLE_PRIORITY + 3U )
+#define SERVICE_TASK_PRI           ( tskIDLE_PRIORITY + 2U )
+#define OBRADA_PRI                 ( tskIDLE_PRIORITY + 1U )
 
 static SemaphoreHandle_t RXC_BinarySemaphore, RXC_BinarySemaphore1, RXC2_BinarySemaphore;
 static SemaphoreHandle_t TBE_BinarySemaphore, TBE_BinarySemaphore1, TBE_BinarySemaphore2;
@@ -39,6 +39,15 @@ static const uint8_t crtica = 0x40U;
 static float_t g_mmL = 0.0f, g_mmD = 0.0f;
 static float_t g_kalL = 0.0f, g_kalD = 0.0f;
 static uint8_t g_aktivan = 0U;
+
+TimerHandle_t xAutoSendTimer;
+
+void vAutoSendTimerCallback(TimerHandle_t xTimer) {
+    if (g_aktivan == 1U) {
+        send_serial_character(COM_CH_0, 'T');
+        send_serial_character(COM_CH_1, 'T');
+    }
+}
 
 static uint32_t prvProcessTBEInterrupt(void) {
     BaseType_t xHigherPTW = pdFALSE;
@@ -68,28 +77,34 @@ static uint32_t OnLED_ChangeInterrupt(void) {
 void posalji_na_pc(const char* str) {
     uint16_t i = 0U;
     while (str[i] != '\0') {
-        if (get_TBE_status(COM_CH_2) == 0) { xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY); }
-        send_serial_character(COM_CH_2, (uint8_t)str[i]);
-        vTaskDelay(pdMS_TO_TICKS(40)); i++;
+        if (xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY) == pdTRUE) {
+            send_serial_character(COM_CH_2, (uint8_t)str[i]); i++;
+        }
     }
-    xSemaphoreTake(TBE_BinarySemaphore2, pdMS_TO_TICKS(10));
-    send_serial_character(COM_CH_2, 13U); vTaskDelay(pdMS_TO_TICKS(40));
-    send_serial_character(COM_CH_2, 10U); vTaskDelay(pdMS_TO_TICKS(40));
+    if (xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY) == pdTRUE) send_serial_character(COM_CH_2, 13U);
+    if (xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY) == pdTRUE) send_serial_character(COM_CH_2, 10U);
 }
 
 void LED_sistem_aktivan(void* pvParameters) {
-    uint8_t flag = 1U;
+    uint8_t vrijednost = 0U; uint8_t flag = 0U;
     for (;;) {
         xSemaphoreTake(LED_INT_BinarySemaphore, portMAX_DELAY);
-        printf("SISTEM AKTIVIRAN KLIKOM NA DIODU\n");
-        g_aktivan = 1U;
+        get_LED_BAR(0, &vrijednost);
+        if (vrijednost == 0x01U) {
+            g_aktivan = 1U; flag = 1U;
+            printf("SISTEM AKTIVIRAN KLIKOM NA DIODU\n");
+        }
+        else {
+            g_aktivan = 0U; flag = 0U;
+            printf("SISTEM DEAKTIVIRAN KLIKOM NA DIODU\n");
+        }
         xQueueSend(sistem_upaljen, &flag, 0U);
     }
 }
 
 void SerialReceive_Task(void* pvParameters) {
     uint8_t cc1 = 0U; uint8_t r_buffer1[R_BUF_SIZE]; uint8_t r_p1 = 0U;
-    float_t broj = 0.0f; memset(r_buffer1, 0, R_BUF_SIZE);
+    float_t broj = 0.0f;  memset(r_buffer1, 0, R_BUF_SIZE);
     for (;;) {
         xSemaphoreTake(RXC_BinarySemaphore, portMAX_DELAY);
         if (get_serial_character(COM_CH_0, &cc1) == 0) {
@@ -111,7 +126,8 @@ void SerialReceive_Task1(void* pvParameters) {
         xSemaphoreTake(RXC_BinarySemaphore1, portMAX_DELAY);
         if (get_serial_character(COM_CH_1, &cc2) == 0) {
             if (cc2 == 0x0dU) {
-                r_buffer2[r_p2] = '\0'; broj1 = (float_t)atof((const char*)r_buffer2);
+                r_buffer2[r_p2] = '\0';
+                broj1 = (float_t)atof((const char*)r_buffer2);
                 g_mmD = broj1; xQueueSend(Data_Queue1, &broj1, 0U);
                 r_p2 = 0U; memset(r_buffer2, 0, R_BUF_SIZE);
             }
@@ -138,7 +154,7 @@ void Kalibracija_kanal(void* pvParameters) {
     uint8_t prijem_rec[REC_BUF_50] = { 0 }; int32_t val = 0; uint8_t flag = 0U;
     for (;;) {
         xQueueReceive(red_kanal2, prijem_rec, portMAX_DELAY);
-        if (strcmp((const char*)&prijem_rec[0], "REVERSE") == 0) {
+        if (strcmp((const char*)prijem_rec, "REVERSE") == 0) {
             flag = 1U; g_aktivan = 1U; printf("SISTEM AKTIVAN\n"); xQueueSend(sistem_upaljen, &flag, 0U);
         }
         else if (strcmp((const char*)prijem_rec, "PARK") == 0 ||
@@ -149,7 +165,6 @@ void Kalibracija_kanal(void* pvParameters) {
             set_LED_BAR(1, 0x00); set_LED_BAR(2, 0x00);
             for (uint8_t i = 0U; i < 7U; i++) { select_7seg_digit(i); set_7seg_digit(0x00); }
         }
-
         if (strstr((const char*)prijem_rec, "LIJEVI") != NULL) {
             if (strstr((const char*)prijem_rec, "_0%") != NULL) {
                 if (sscanf((const char*)prijem_rec, "KALIBRACIJA_LIJEVI_%dmm_0%%", &val) == 1) {
@@ -234,9 +249,9 @@ void LED_bar(void* pvParameters) {
             else if (kal <= 20.0f) { set_LED_BAR(2, 0xFF); }
             else if (kal >= 100.0f) { set_LED_BAR(2, 0x00); }
             else {
-                int32_t broj_dioda = (int32_t)((100.0f - kal) / 12.5f);
+                int32_t d = (int32_t)((100.0f - kal) / 12.5f);
                 uint8_t prom = 0U;
-                for (int32_t i = 0; i < broj_dioda; i++) { prom |= (uint8_t)(1 << i); }
+                for (int32_t i = 0; i < d; i++) { prom |= (uint8_t)(1 << i); }
                 set_LED_BAR(2, prom);
             }
         }
@@ -301,6 +316,8 @@ void main_demo(void) {
     TBE_BinarySemaphore1 = xSemaphoreCreateBinary();
     TBE_BinarySemaphore2 = xSemaphoreCreateBinary();
     LED_INT_BinarySemaphore = xSemaphoreCreateBinary();
+    xSemaphoreGive(TBE_BinarySemaphore);
+    xSemaphoreGive(TBE_BinarySemaphore1);
     xSemaphoreGive(TBE_BinarySemaphore2);
 
     Data_Queue = xQueueCreate(5, sizeof(float_t));
@@ -315,6 +332,9 @@ void main_demo(void) {
     displej1 = xQueueCreate(1, sizeof(float_t));
     displej2 = xQueueCreate(1, sizeof(float_t));
 
+    xAutoSendTimer = xTimerCreate("T", pdMS_TO_TICKS(200), pdTRUE, NULL, vAutoSendTimerCallback);
+    xTimerStart(xAutoSendTimer, 0);
+
     xTaskCreate(SerialReceive_Task, "SRx0", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task1, "SRx1", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
     xTaskCreate(SerialReceive_Task2, "SRx2", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAl_REC_PRI, NULL);
@@ -326,5 +346,5 @@ void main_demo(void) {
     xTaskCreate(PC_Reporting_Task, "PC", configMINIMAL_STACK_SIZE, NULL, SERVICE_TASK_PRI, NULL);
 
     vTaskStartScheduler();
-    while (1) { ; }
+    while (1);
 }
